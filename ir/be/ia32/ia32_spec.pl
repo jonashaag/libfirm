@@ -1190,13 +1190,13 @@ Return => {
 },
 
 Call => {
-	op_flags  => [ "uses_memory" ],
+	op_flags  => [ "uses_memory", "fragile" ],
 	irn_flags => [ "modify_flags" ],
 	state     => "exc_pinned",
 	in_reqs   => "...",
 	out_reqs  => "...",
 	ins       => [ "base", "index", "mem", "callee", "stack", "first_argument" ],
-	outs      => [ "mem", "stack", "first_result" ],
+	outs      => [ "mem", "stack", "X_regular", "X_except", "first_result" ],
 	emit      => "call %*AS3",
 	attr_type => "ia32_call_attr_t",
 	attr      => "unsigned pop, ir_type *call_tp",
