@@ -204,8 +204,14 @@ static void collect_egde_frequency(ir_node *block, void *data)
 	entry->block = block;
 	set_irn_link(block, entry);
 
-	ir_loop *loop  = get_irn_loop(block);
-	int      arity = get_Block_n_cfgpreds(block);
+	int arity = get_Block_n_cfgpreds(block);
+
+	for (int i = 0; i < arity; ++i) {
+		ir_node *const cfgpred = get_Block_cfgpred(block, i);
+		if (is_x_except_branch(cfgpred))
+			return;
+	}
+
 	if (arity == 0) {
 		/* must be the start block (or end-block for endless loops),
 		 * everything else is dead code and should be removed by now */
@@ -214,6 +220,7 @@ static void collect_egde_frequency(ir_node *block, void *data)
 		/* nothing to do here */
 		return;
 	} else if (arity == 1) {
+		ir_loop *loop       = get_irn_loop(block);
 		ir_node *pred_block = get_Block_cfgpred_block(block, 0);
 		ir_loop *pred_loop  = get_irn_loop(pred_block);
 		float    freq       = (float)get_block_execfreq(block);
