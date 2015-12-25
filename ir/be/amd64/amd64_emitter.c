@@ -979,14 +979,14 @@ static void amd64_gen_block(ir_node *block)
 
 void amd64_emit_function(ir_graph *irg)
 {
-	ir_entity *entity = get_irg_entity(irg);
+	const ir_entity *const entity = get_irg_entity(irg);
 
 	layout = be_get_irg_stack_layout(irg);
 
 	/* register all emitter functions */
 	amd64_register_emitters();
 
-	ir_node **blk_sched = be_create_block_schedule(irg);
+	ir_node *const *const blk_sched = be_create_block_schedule(irg);
 
 	be_gas_emit_function_prolog(entity, 4, NULL);
 
