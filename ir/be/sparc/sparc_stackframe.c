@@ -138,6 +138,9 @@ static void process_bias(ir_node *block, bool omit_fp, int bias, int free_bytes)
 		ir_node *succ = get_edge_src_irn(edge);
 		if (Block_block_visited(succ))
 			continue;
+		/* XXX HACK, this should be treated with 7a92bdea4edfe16c6a8e22aab0d92a8a34b03b05 as well */
+		if ((succ == get_irg_end_block(get_irn_irg(block)) && is_x_except_branch(get_irn_in(succ)[edge->pos])))
+			continue;
 		process_bias(succ, omit_fp, bias, free_bytes);
 	}
 }
