@@ -313,6 +313,15 @@ void be_dwarf_location(dbg_info *dbgi)
 	be_emit_write_line();
 }
 
+void be_dwarf_callframe(const arch_register_t *reg, int offset)
+{
+	if (should_emit_cfi_directives()) {
+		be_emit_cstring("\t.cfi_def_cfa ");
+		be_emit_irprintf("%%%s, %d\n", reg->name, offset);
+		be_emit_write_line();
+	}
+}
+
 void be_dwarf_callframe_register(const arch_register_t *reg)
 {
 	if (debug_level < LEVEL_FRAMEINFO)

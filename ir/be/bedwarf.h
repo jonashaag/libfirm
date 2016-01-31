@@ -47,6 +47,9 @@ void be_dwarf_variable(const ir_entity *ent);
  * assembly instructions */
 void be_dwarf_location(dbg_info *dbgi);
 
+/** set base register and offset from base register that point to the callframe. */
+void be_dwarf_callframe(const arch_register_t *reg, int offset);
+
 /** set base register that points to callframe */
 void be_dwarf_callframe_register(const arch_register_t *reg);
 
