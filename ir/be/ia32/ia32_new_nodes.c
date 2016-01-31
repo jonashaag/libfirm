@@ -232,7 +232,6 @@ void ia32_dump_node(FILE *F, const ir_node *n, dump_reason_t reason)
 			}
 
 			fprintf(F, "commutative = %s\n", be_dump_yesno(is_ia32_commutative(n)));
-			fprintf(F, "is reload = %s\n", be_dump_yesno(is_ia32_is_reload(n)));
 			fprintf(F, "latency = %u\n", get_ia32_latency(n));
 
 			/* dump modes */
@@ -513,42 +512,6 @@ int is_ia32_commutative(const ir_node *node)
 {
 	const ia32_attr_t *attr = get_ia32_attr_const(node);
 	return attr->is_commutative;
-}
-
-void set_ia32_is_reload(ir_node *node)
-{
-	ia32_attr_t *attr = get_ia32_attr(node);
-	attr->is_reload = 1;
-}
-
-int is_ia32_is_reload(const ir_node *node)
-{
-	const ia32_attr_t *attr = get_ia32_attr_const(node);
-	return attr->is_reload;
-}
-
-void set_ia32_is_spill(ir_node *node)
-{
-	ia32_attr_t *attr = get_ia32_attr(node);
-	attr->is_spill = 1;
-}
-
-int is_ia32_is_spill(const ir_node *node)
-{
-	const ia32_attr_t *attr = get_ia32_attr_const(node);
-	return attr->is_spill;
-}
-
-void set_ia32_is_remat(ir_node *node)
-{
-	ia32_attr_t *attr = get_ia32_attr(node);
-	attr->is_remat = 1;
-}
-
-int is_ia32_is_remat(const ir_node *node)
-{
-	const ia32_attr_t *attr = get_ia32_attr_const(node);
-	return attr->is_remat;
 }
 
 unsigned get_ia32_latency(const ir_node *node)
