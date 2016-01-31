@@ -315,20 +315,11 @@ void be_dwarf_location(dbg_info *dbgi)
 
 void be_dwarf_callframe(const arch_register_t *reg, int offset)
 {
-	if (should_emit_cfi_directives()) {
+	if (should_emit_frameinfo()) {
 		be_emit_cstring("\t.cfi_def_cfa ");
 		be_emit_irprintf("%%%s, %d\n", reg->name, offset);
 		be_emit_write_line();
 	}
-}
-
-void be_dwarf_callframe_register(const arch_register_t *reg)
-{
-	if (debug_level < LEVEL_FRAMEINFO)
-		return;
-	be_emit_cstring("\t.cfi_def_cfa_register ");
-	be_emit_irprintf("%d\n", reg->dwarf_number);
-	be_emit_write_line();
 }
 
 void be_dwarf_callframe_offset(int offset)
@@ -347,6 +338,15 @@ void be_dwarf_callframe_spilloffset(const arch_register_t *reg, int offset)
 	be_emit_cstring("\t.cfi_offset ");
 	be_emit_irprintf("%d, %d\n", reg->dwarf_number, offset);
 	be_emit_write_line();
+}
+
+void be_dwarf_same_value(const arch_register_t *reg)
+{
+	if (should_emit_frameinfo()) {
+		be_emit_cstring("\t.cfi_same_value ");
+		be_emit_irprintf("%%%s\n", reg->name);
+		be_emit_write_line();
+	}
 }
 
 static bool is_extern_entity(const ir_entity *entity)

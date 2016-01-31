@@ -47,22 +47,21 @@ void be_dwarf_variable(const ir_entity *ent);
  * assembly instructions */
 void be_dwarf_location(dbg_info *dbgi);
 
-/** set base register and offset from base register that point to the callframe. */
+/** Set base register and offset from base register that point to the CFA. */
 void be_dwarf_callframe(const arch_register_t *reg, int offset);
 
-/** set base register that points to callframe */
-void be_dwarf_callframe_register(const arch_register_t *reg);
-
-/** set offset from base register that points to the callframe.
- * Note: callframe is defined as in the dwarf documentation here which is the
- * stackpointer before the call has happened. (Which would be the beginning of
- * the between type in our backend) */
+/** Set offset from base register that points to the CFA. */
 void be_dwarf_callframe_offset(int offset);
 
 /**
- * Indicate at which offset (relative to the CFA) a caller saved register has
+ * Indicate at which offset (relative to the CFA) a callee-saved register has
  * been saved.
  */
 void be_dwarf_callframe_spilloffset(const arch_register_t *reg, int offset);
+
+/**
+ * Indicate that a callee-saved register has been reloaded.
+ */
+void be_dwarf_same_value(const arch_register_t *reg);
 
 #endif

@@ -63,8 +63,10 @@ static ir_label_t exc_label_id;
 static bool       mark_spill_reload;
 
 static bool       omit_fp;
-static int        frame_type_size;
-static int        callframe_offset;
+static int        sp_callframe_offset;
+/* When using base pointer relative call frames, the offset is always 4 bytes
+ * for the return address + 4 bytes for the old base pointer ("pushl %ebp"). */
+static const int  BP_CALLFRAME_OFFSET = 8;
 static ir_entity *thunks[N_ia32_gp_REGS];
 static ir_type   *thunk_type;
 
@@ -106,6 +108,15 @@ static bool block_needs_label(const ir_node *block)
 		return be_emit_get_prev_block(block) != cfgpred_block;
 	} else {
 		return true;
+	}
+}
+
+static void emit_dwarf_callframe_offset(void)
+{
+	if (omit_fp) {
+		be_dwarf_callframe(&ia32_registers[REG_ESP], sp_callframe_offset);
+	} else {
+		be_dwarf_callframe(&ia32_registers[REG_EBP], BP_CALLFRAME_OFFSET);
 	}
 }
 
@@ -1380,6 +1391,62 @@ static void ia32_assign_exc_label(ir_node *node)
 	be_emit_write_line();
 }
 
+COMPILETIME_ASSERT(n_ia32_unary_op == n_ia32_binary_left, ia32_am_inputs);
+static const ir_node *get_spill_value(const ir_node *const spill)
+{
+	assert(arch_irn_is(spill, spill));
+	return get_irn_n(spill, n_ia32_unary_op);
+}
+
+static void reset_sp_callframe_offset(const ir_node *const block)
+{
+	const ir_graph *const irg = get_irn_irg(block);
+	sp_callframe_offset = 4; /* 4 bytes for the return address */
+	/* ESP guessing, TODO perform a real ESP simulation */
+	if (block != get_irg_start_block(irg)) {
+		const ir_graph *const irg        = get_irn_irg(block);
+		const ir_type  *const frame_type = get_irg_frame_type(irg);
+		const unsigned  frame_type_size  = get_type_size(frame_type);
+		sp_callframe_offset += frame_type_size;
+	}
+	emit_dwarf_callframe_offset();
+}
+
+/** Return true if a spill is a callee save. */
+static bool is_callee_save(const ir_node *const spill)
+{
+	const ir_node *const spill_value = get_spill_value(spill);
+	return skip_Proj_const(spill_value) == get_irg_start(get_irn_irg(spill));
+}
+
+static void emit_dwarf_spill_info(const ir_node *const node)
+{
+	if (!is_ia32_irn(node))
+	   return;
+
+	if (arch_irn_is(node, reload)) {
+		/* TODO: implement this; have a look at amd64 emitter for reference.
+		 * ...
+		 * be_dwarf_same_value(...)
+		 */
+	}
+	else if (arch_irn_is(node, spill)) {
+		/* Only emit callee-save spills. */
+		if (is_callee_save(node)) {
+			const ir_node         *const value  = get_spill_value(node);
+			const arch_register_t *const reg    = arch_get_irn_register(value);
+			const int32_t                offset = get_ia32_am_offs_int(node);
+			if (omit_fp) {
+				/* Spills are stack pointer relative. */
+				be_dwarf_callframe_spilloffset(reg, offset - sp_callframe_offset);
+			} else {
+				/* Spills are base pointer relative. */
+				be_dwarf_callframe_spilloffset(reg, offset - BP_CALLFRAME_OFFSET);
+			}
+		}
+	}
+}
+
 /**
  * Emits code for a node.
  */
@@ -1387,30 +1454,17 @@ static void ia32_emit_node(ir_node *node)
 {
 	DBG((dbg, LEVEL_1, "emitting code for %+F\n", node));
 
-	if (is_ia32_irn(node)) {
-		/* emit the exception label of this instruction */
-		if (get_ia32_exc_label(node))
-			ia32_assign_exc_label(node);
-		if (mark_spill_reload) {
-			if (is_ia32_is_spill(node))
-				ia32_emitf(NULL, "xchg %ebx, %ebx        /* spill mark */");
-			if (is_ia32_is_reload(node))
-				ia32_emitf(NULL, "xchg %edx, %edx        /* reload mark */");
-			if (is_ia32_is_remat(node))
-				ia32_emitf(NULL, "xchg %ecx, %ecx        /* remat mark */");
-		}
-	}
-
 	be_emit_node(node);
 
-	if (omit_fp) {
-		int sp_change = ia32_get_sp_bias(node);
-		if (sp_change != 0) {
-			assert(sp_change != SP_BIAS_RESET);
-			callframe_offset += sp_change;
-			be_dwarf_callframe_offset(callframe_offset);
-		}
+	/* Record any change to the stack pointer this node may cause.
+	 * This is needed for DWARF information. */
+	int sp_change = ia32_get_sp_bias(node);
+	if (sp_change != 0 && sp_change != SP_BIAS_RESET) {
+		sp_callframe_offset += sp_change;
+		emit_dwarf_callframe_offset();
 	}
+
+	emit_dwarf_spill_info(node);
 }
 
 /**
@@ -1525,13 +1579,7 @@ static void ia32_gen_block(ir_node *block)
 	ia32_emit_block_header(block);
 
 	if (omit_fp) {
-		ir_graph *irg = get_irn_irg(block);
-		callframe_offset = 4; /* 4 bytes for the return address */
-		/* ESP guessing, TODO perform a real ESP simulation */
-		if (block != get_irg_start_block(irg)) {
-			callframe_offset += frame_type_size;
-		}
-		be_dwarf_callframe_offset(callframe_offset);
+		reset_sp_callframe_offset(block);
 	}
 
 	/* emit the contents of the block */
@@ -1610,7 +1658,7 @@ static void emit_function_text(ir_graph *const irg, exc_entry **const exc_list)
 {
 	ia32_register_emitters();
 
-	ir_node  **const blk_sched = be_create_block_schedule(irg);
+	ir_node *const *const blk_sched = be_create_block_schedule(irg);
 
 	/* we use links to point to target blocks */
 	ir_reserve_resources(irg, IR_RESOURCE_IRN_LINK);
@@ -1677,26 +1725,13 @@ void ia32_emit_function(ir_graph *const irg)
 {
 	exc_entry *exc_list = NEW_ARR_F(exc_entry, 0);
 	be_gas_elf_type_char = '@';
+	omit_fp = ia32_get_irg_data(irg)->omit_fp;
 
 	ir_entity *const entity = get_irg_entity(irg);
 	parameter_dbg_info_t *infos = construct_parameter_infos(irg);
 	be_gas_emit_function_prolog(entity, ia32_cg_config.function_alignment,
 	                            NULL);
 	free(infos);
-
-	omit_fp = ia32_get_irg_data(irg)->omit_fp;
-	if (omit_fp) {
-		ir_type *frame_type = get_irg_frame_type(irg);
-		frame_type_size = get_type_size(frame_type);
-		be_dwarf_callframe_register(&ia32_registers[REG_ESP]);
-	} else {
-		/* well not entirely correct here, we should emit this after the
-		 * "movl esp, ebp" */
-		be_dwarf_callframe_register(&ia32_registers[REG_EBP]);
-		/* TODO: do not hardcode the following */
-		be_dwarf_callframe_offset(8);
-		be_dwarf_callframe_spilloffset(&ia32_registers[REG_EBP], -8);
-	}
 
 	get_unique_label(pic_base_label, sizeof(pic_base_label), "PIC_BASE");
 

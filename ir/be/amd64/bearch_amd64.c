@@ -89,7 +89,7 @@ static void amd64_set_frame_offset(ir_node *node, int offset)
 	attr->addr.immediate.entity = NULL;
 }
 
-static int amd64_get_sp_bias(const ir_node *node)
+int amd64_get_sp_bias(const ir_node *const node)
 {
 	if (is_amd64_push_am(node)) {
 		const amd64_addr_attr_t *attr = get_amd64_addr_attr_const(node);
@@ -570,6 +570,7 @@ static void introduce_prologue(ir_graph *const irg, bool omit_fp)
 		ir_node *const mem        = get_irg_initial_mem(irg);
 		ir_node *const initial_bp = be_get_Start_proj(irg, bp);
 		ir_node *const push       = new_bd_amd64_push_reg(NULL, block, initial_sp, mem, initial_bp);
+		arch_add_irn_flags(push, arch_irn_flag_spill);
 		sched_add_after(start, push);
 		ir_node *const curr_mem   = be_new_Proj(push, pn_amd64_push_reg_M);
 		edges_reroute_except(mem, curr_mem, push);

@@ -209,6 +209,12 @@ int ia32_get_sp_bias(const ir_node *node)
 		return -get_mode_size_bytes(ls_mode);
 	}
 
+	if (be_is_IncSP(node)) {
+		const int offset = be_get_IncSP_offset(node);
+		assert(((offset & 3) == 0) && "spill slots must be 4-byte aligned");
+		return offset;
+	}
+
 	if (is_ia32_Leave(node) || is_ia32_CopyEbpEsp(node))
 		return SP_BIAS_RESET;
 

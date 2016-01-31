@@ -22,6 +22,9 @@
 #include "beirg.h"
 #include "benode.h"
 #include "besched.h"
+#include "bestack.h"
+#include "bearch.h"
+#include "bearch_amd64_t.h"
 #include "gen_amd64_emitter.h"
 #include "gen_amd64_regalloc_if.h"
 #include "iredges_t.h"
@@ -29,6 +32,20 @@
 #include "panic.h"
 
 static be_stack_layout_t *layout;
+static bool       omit_fp;
+static int        sp_callframe_offset;
+/* When using base pointer relative call frames, the offset is always 8 bytes
+ * for the return address + 8 bytes for the old base pointer ("pushl %ebp"). */
+static const int  BP_CALLFRAME_OFFSET = 16;
+
+static void emit_dwarf_callframe_offset(void)
+{
+	if (omit_fp) {
+		be_dwarf_callframe(&amd64_registers[REG_RSP], sp_callframe_offset);
+	} else {
+		be_dwarf_callframe(&amd64_registers[REG_RBP], BP_CALLFRAME_OFFSET);
+	}
+}
 
 static char get_gp_size_suffix(amd64_insn_size_t const size)
 {
@@ -944,6 +961,102 @@ static void amd64_register_emitters(void)
 	be_set_emitter(op_be_Perm,          emit_be_Perm);
 }
 
+static const ir_node *get_spill_value(const ir_node *const spill)
+{
+	assert(arch_irn_is(spill, spill));
+	if (is_amd64_push_reg(spill)) {
+		return get_irn_n(spill, n_amd64_push_reg_val);
+	} else {
+		/* TODO: make sure spill value is always at position 0 */
+		return get_irn_n(spill, 0);
+	}
+}
+
+static void reset_sp_callframe_offset(const ir_node *const block)
+{
+	const ir_graph *const irg = get_irn_irg(block);
+	sp_callframe_offset = 8; /* 8 bytes for the return address */
+	/* ESP guessing, TODO perform a real ESP simulation */
+	if (block != get_irg_start_block(irg)) {
+		const ir_graph *const irg        = get_irn_irg(block);
+		const ir_type  *const frame_type = get_irg_frame_type(irg);
+		const unsigned  frame_type_size  = get_type_size(frame_type);
+		sp_callframe_offset += frame_type_size;
+	}
+	emit_dwarf_callframe_offset();
+}
+
+/** Return true if a spill is a callee save. */
+static bool is_callee_save(const ir_node *const spill)
+{
+	/* TODO: This currently has some false positives, see comment below. */
+	const ir_node *const spill_value = get_spill_value(spill);
+	return skip_Proj_const(spill_value) == get_irg_start(get_irn_irg(spill));
+}
+
+static void emit_dwarf_spill_info(const ir_node *const node)
+{
+	if (!is_amd64_irn(node))
+	   return;
+
+	if (arch_irn_is(node, reload)) {
+		const ir_node *const spill = get_irn_n(node, 1);
+		assert(arch_irn_is(spill, spill));
+		/* Only emit callee-save reloads. */
+		if (is_callee_save(spill)) {
+			/* TODO: make sure reload target is always at position 0 */
+			const arch_register_t *const reg   = arch_get_irn_register_out(node, 0);
+			const ir_node         *const value = get_spill_value(spill);
+			/* TODO: This assertion currently doesn't hold because
+			 * "is_callee_save" has some false-positives (any non-callee-save
+			 * Projs added in "gen_Start").
+			 */
+			assert(reg == arch_get_irn_register(value));
+			be_dwarf_same_value(reg);
+		}
+	}
+	else if (arch_irn_is(node, spill)) {
+		/* Only emit callee-save spills. */
+		if (is_callee_save(node)) {
+			const ir_node         *const value = get_spill_value(node);
+			const arch_register_t *const reg   = arch_get_irn_register(value);
+			int32_t offset;
+			/* TODO: Does this cover all possible spills? */
+			if (is_amd64_push_reg(node)) {
+				offset = 0;
+			} else {
+				const amd64_addr_attr_t *const attr = get_amd64_addr_attr(node);
+				offset = attr->addr.immediate.offset;
+			}
+			if (omit_fp) {
+				/* Spills are stack pointer relative. */
+				be_dwarf_callframe_spilloffset(reg, offset - sp_callframe_offset);
+			} else {
+				/* Spills are base pointer relative. */
+				be_dwarf_callframe_spilloffset(reg, offset - BP_CALLFRAME_OFFSET);
+			}
+		}
+	}
+}
+
+/**
+ * Emits code for a node.
+ */
+static void amd64_emit_node(const ir_node *const node)
+{
+	be_emit_node(node);
+
+	/* Record any change to the stack pointer this node may cause.
+	 * This is needed for DWARF information. */
+	int sp_change = amd64_get_sp_bias(node);
+	if (sp_change != 0 && sp_change != SP_BIAS_RESET) {
+		sp_callframe_offset += sp_change;
+		emit_dwarf_callframe_offset();
+	}
+
+	emit_dwarf_spill_info(node);
+}
+
 /**
  * Walks over the nodes in a block connected by scheduling edges
  * and emits code for each node.
@@ -952,8 +1065,12 @@ static void amd64_gen_block(ir_node *block)
 {
 	be_gas_begin_block(block, true);
 
+	if (omit_fp) {
+		reset_sp_callframe_offset(block);
+	}
+
 	sched_foreach(block, node) {
-		be_emit_node(node);
+		amd64_emit_node(node);
 	}
 }
 

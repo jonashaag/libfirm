@@ -140,7 +140,7 @@ FIRM_API ir_entity *get_irg_entity(const ir_graph *irg);
 FIRM_API void set_irg_entity(ir_graph *irg, ir_entity *ent);
 
 /** Returns the frame type of an IR graph. */
-FIRM_API ir_type *get_irg_frame_type(ir_graph *irg);
+FIRM_API ir_type *get_irg_frame_type(const ir_graph *irg);
 /** Sets the frame type of an IR graph. */
 FIRM_API void set_irg_frame_type(ir_graph *irg, ir_type *ftp);
 

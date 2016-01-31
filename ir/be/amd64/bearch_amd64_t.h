@@ -51,4 +51,6 @@ void amd64_adjust_pic(ir_graph *irg);
 
 void amd64_simulate_graph_x87(ir_graph *irg);
 
+int amd64_get_sp_bias(const ir_node *const node);
+
 #endif

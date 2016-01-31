@@ -66,10 +66,10 @@ static inline bool amd64_loads(const ir_node *node)
 	}
 }
 
-static inline amd64_addr_attr_t *get_amd64_addr_attr(ir_node *node)
+static inline amd64_addr_attr_t *get_amd64_addr_attr(const ir_node *const node)
 {
 	assert(amd64_has_addr_attr(get_amd64_attr_const(node)->op_mode));
-	return (amd64_addr_attr_t*)get_irn_generic_attr(node);
+	return (amd64_addr_attr_t*)get_irn_generic_attr_const(node);
 }
 
 static inline const amd64_addr_attr_t *get_amd64_addr_attr_const(

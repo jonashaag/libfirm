@@ -383,7 +383,7 @@ void (set_irg_entity)(ir_graph *irg, ir_entity *ent)
 	set_irg_entity_(irg, ent);
 }
 
-ir_type *(get_irg_frame_type)(ir_graph *irg)
+ir_type *(get_irg_frame_type)(const ir_graph *irg)
 {
 	return get_irg_frame_type_(irg);
 }
