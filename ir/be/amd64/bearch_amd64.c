@@ -90,7 +90,7 @@ static void amd64_set_frame_offset(ir_node *node, int offset)
 	attr->addr.immediate.entity = NULL;
 }
 
-static int amd64_get_sp_bias(const ir_node *node)
+int amd64_get_sp_bias(const ir_node *node)
 {
 	if (is_amd64_push_am(node)) {
 		const amd64_addr_attr_t *attr = get_amd64_addr_attr_const(node);
